@@ -5,6 +5,7 @@ import logging
 import os
 import platform
 import ssl
+import random
 
 from aiohttp import web
 
@@ -30,6 +31,14 @@ async def offer(request):
 
     pc = RTCPeerConnection()
     pcs.add(pc)
+
+    @pc.on("datachannel")
+    async def on_datachannel(channel):
+        print("this is on_datachannel")
+        dcs.add(channel)
+        @channel.on("message")
+        async def on_message(message):
+            print("rx msg:", message)
 
     @pc.on("iceconnectionstatechange")
     async def on_iceconnectionstatechange():
@@ -67,6 +76,7 @@ async def offer(request):
 
 
 pcs = set()
+dcs = set()
 
 
 async def on_shutdown(app):
@@ -74,6 +84,28 @@ async def on_shutdown(app):
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
     pcs.clear()
+
+
+async def my_loop():
+    SLEEP_TIME = 0.1
+    count = 0
+    while True:
+        print('hello', count)
+        count += 1
+        msg = {'cmd': "hello %d" % count, 'a': random.random() * 50, 'b': random.random() * 90}
+        jsonMsg = json.dumps(msg)
+        for dc in dcs:
+            try:
+                dc.send(jsonMsg)
+            except:
+                pass
+            else:
+                print('dc:', dc.bufferedAmount, dc.ordered, dc.maxPacketLifeTime, dc.maxRetransmits)
+                if dc.bufferedAmount > 5000:
+                    SLEEP_TIME = 0.5
+
+        await asyncio.sleep(SLEEP_TIME)
+
 
 
 if __name__ == "__main__":
@@ -104,4 +136,8 @@ if __name__ == "__main__":
     app.router.add_get("/", index)
     app.router.add_get("/client.js", javascript)
     app.router.add_post("/offer", offer)
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(my_loop())
+
     web.run_app(app, host=args.host, port=args.port, ssl_context=ssl_context)

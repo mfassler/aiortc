@@ -1,4 +1,5 @@
 var pc = null;
+var dc = null;
 
 function negotiate() {
     pc.addTransceiver('video', {direction: 'recvonly'});
@@ -41,6 +42,15 @@ function negotiate() {
     });
 }
 
+
+function dc_onmessage(msg) {
+    window._myMsg = msg;
+    //console.log('RX msg:', msg);
+    var cmd = JSON.parse(msg.data);
+    console.log(cmd);
+}
+
+
 function start() {
     var config = {
         sdpSemantics: 'unified-plan'
@@ -51,6 +61,9 @@ function start() {
     }
 
     pc = new RTCPeerConnection(config);
+
+    dc = pc.createDataChannel('myChannel');
+    dc.addEventListener('message', dc_onmessage);
 
     // connect audio / video
     pc.addEventListener('track', function(evt) {
